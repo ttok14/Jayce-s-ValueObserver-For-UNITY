@@ -1,0 +1,624 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using System;
+using System.Text;
+using System.Linq;
+
+//
+//  To Use , Define JAYCE_ANALYSIS_HELPER
+// 
+public class JayceGUIAnalysisHelper : MonoBehaviour
+{
+    enum WidthOps
+    {
+        Tap01,
+        Tap02,
+        Tap03,
+        Value01,
+        Value02,
+        Value03,
+        END
+    }
+
+    static JayceGUIAnalysisHelper instance;
+
+    public static JayceGUIAnalysisHelper Instance
+    {
+        get
+        {
+            if (instance == null)
+            {
+                new GameObject("GUIAnalysisHelper", typeof(JayceGUIAnalysisHelper));
+            }
+
+            return instance;
+        }
+    }
+
+    class Value : IComparable<Value>
+    {
+        public string key;
+        public float idleTimeElapsed;
+        public string value;
+        public string oldValue;
+
+        public Value(string key)
+        {
+            this.key = key;
+            SetDefault();
+        }
+
+        public int CompareTo(Value other)
+        {
+            if (idleTimeElapsed < other.idleTimeElapsed)
+            {
+                return -1;
+            }
+            else if (idleTimeElapsed > other.idleTimeElapsed)
+            {
+                return 1;
+            }
+
+            return 0;
+        }
+
+        public void SetDefault()
+        {
+            value = NOT_SET_STRING;
+            oldValue = NOT_SET_STRING;
+            idleTimeElapsed = 0;
+        }
+    }
+
+    class DrawProperty
+    {
+        public int fontSize;
+
+        public float startXratioToScreen;
+        public float startYratioToScreen;
+
+        public float[] widths;
+
+        public DrawProperty()
+        {
+            fontSize = 0;
+            startXratioToScreen = 0;
+            startYratioToScreen = 0;
+            widths = new float[(int)WidthOps.END];
+        }
+    }
+
+    // channel , value
+    Dictionary<string, List<Value>> values = new Dictionary<string, List<Value>>();
+
+    DrawProperty prop = new DrawProperty();
+
+    const string tapKey = "<color=red>Key</color>";
+    const string tapIdleTime = "<color=red>IdleTime</color>";
+    const string tapValue = "<color=red>Value</color>";
+    const string tapOldValue = "<color=red>OldValue</color>";
+
+    const string fontSizeKey = "GUIAnalysisHelper_fontSize_";
+    const string startXratioToScreenKey = "GUIAnalysisHelper_startXratio_";
+    const string startYratioToScreenKey = "GUIAnalysisHelper_startYratio_";
+    string[] widthKeys =
+    {
+     "GUIAnalysisHelper_tapWidth01_",
+     "GUIAnalysisHelper_tapWidth02_",
+     "GUIAnalysisHelper_tapWidth03_",
+      "GUIAnalysisHelper_valueWidth01_",
+      "GUIAnalysisHelper_valueWidth02_",
+      "GUIAnalysisHelper_valueWidth03_"
+    };
+
+    const string NOT_SET_STRING = "N/S";
+    const string showString = "Show";
+    const string hideString = "Hide";
+    const string editOptionString = "EditOption";
+    const string setToDefaultString = "SetToDefault";
+    const string fontSizeString = "FontSize";
+    const string positionString = "Position";
+    const string widthString = "Width";
+    const string channelListString = "Channels";
+    const string noExistingChannelString = "<color=red>No Existing Channel</color>";
+    const string clearValuesOnChangeChannelString = "ClearOnChannelSwitch";
+    const string autoSortString = "AutoSort";
+
+    const string floatFormatter = "0.000";
+
+    int curChannelIndex;
+    string curChannel = "";
+    List<Value> curChannelValue;
+    string[] channels;
+
+    const int default_fontSize = 15;
+    const float default_startXratioToScreen = 0.2f;
+    const float default_startYratioToScreen = 0.2f;
+    readonly float[] default_widths = { 100, 100, 100, 100, 100, 100 };
+
+    Rect area;
+    GUILayoutOption[] widths = new GUILayoutOption[(int)WidthOps.END];
+    GUILayoutOption optionSliderWid;
+    GUIStyle style;
+
+    bool show = true;
+    bool editOption;
+    bool sortValuesByIdleTime = true;
+    bool clearValuesOnChangeChannel = false;
+
+    bool sortingValues;
+
+    private void Awake()
+    {
+        if (instance == null)
+            instance = this;
+        else Destroy(gameObject);
+
+        Array.ForEach(widthKeys, t => t.Concat(Application.productName));
+
+        optionSliderWid = GUILayout.Width(100);
+
+        style = new GUIStyle();
+        style.fontStyle = FontStyle.Bold;
+
+        LoadDrawProperty();
+        UpdateDrawProperty();
+    }
+
+    void UpdateWidthOps()
+    {
+        for (int i = 0; i < prop.widths.Length; i++)
+        {
+            widths[i] = GUILayout.Width(prop.widths[i]);
+        }
+    }
+
+    void SetWidth(WidthOps op, float width)
+    {
+        prop.widths[(int)op] = width;
+    }
+
+    void SetWidths(
+        params float[] widths)
+    {
+        for (int i = 0; i < (int)WidthOps.END; i++)
+        {
+            prop.widths[i] = widths[i];
+        }
+    }
+
+    void SetDrawPropertyToDefault()
+    {
+        prop.fontSize = default_fontSize;
+        prop.startXratioToScreen = default_startXratioToScreen;
+        prop.startYratioToScreen = default_startYratioToScreen;
+        default_widths.CopyTo(prop.widths, 0);
+
+        UpdateDrawProperty();
+    }
+
+    public void LoadDrawProperty()
+    {
+        prop.fontSize = PlayerPrefs.GetInt(fontSizeKey, default_fontSize);
+        prop.startXratioToScreen = PlayerPrefs.GetFloat(startXratioToScreenKey, default_startXratioToScreen);
+        prop.startYratioToScreen = PlayerPrefs.GetFloat(startYratioToScreenKey, default_startYratioToScreen);
+        LoadWidths();
+    }
+
+    void LoadWidths()
+    {
+        for (int i = 0; i < (int)WidthOps.END; i++)
+        {
+            prop.widths[i] = PlayerPrefs.GetFloat(widthKeys[i], default_widths[i]);
+        }
+    }
+
+    void SaveWidthToDisk()
+    {
+        for (int i = 0; i < (int)WidthOps.END; i++)
+        {
+            PlayerPrefs.SetFloat(widthKeys[i], prop.widths[i]);
+        }
+    }
+
+    void SaveDrawPropertyToDisk()
+    {
+        PlayerPrefs.SetInt(fontSizeKey, prop.fontSize);
+        PlayerPrefs.SetFloat(startXratioToScreenKey, prop.startXratioToScreen);
+        PlayerPrefs.SetFloat(startYratioToScreenKey, prop.startYratioToScreen);
+        SaveWidthToDisk();
+    }
+
+    void UpdateDrawProperty()
+    {
+        style.fontSize = prop.fontSize;
+        area.Set(Screen.width * prop.startXratioToScreen, Screen.height * prop.startYratioToScreen, Screen.width, Screen.height);
+        UpdateWidthOps();
+    }
+
+    public void SetEnable(bool enable)
+    {
+        show = enable;
+    }
+
+    public void RegisterChannel(string channel)
+    {
+        if (values.ContainsKey(channel))
+        {
+            PrintErrorMsg("Duplicate Channel", channel);
+            return;
+        }
+        if (string.IsNullOrEmpty(channel))
+        {
+            PrintErrorMsg("It is not valid string", channel);
+            return;
+        }
+
+        bool wasEmpty = values.Count == 0;
+
+        values.Add(channel, new List<Value>());
+
+        if (wasEmpty)
+        {
+            ChangeChannel(channel);
+        }
+    }
+
+    public void UnregisterChannel(string channel)
+    {
+        if (values.ContainsKey(channel) == false)
+        {
+            PrintErrorMsg("Not Found Channel", channel);
+            return;
+        }
+
+        ReleaseValues(values[channel]);
+        values[channel] = null;
+        values.Remove(channel);
+
+        bool isCurrentChannel = curChannel.Equals(channel);
+
+        if (isCurrentChannel)
+        {
+            string switchTo = values.Count > 0 ? values.First().Key : string.Empty;
+
+            ChangeChannel(switchTo);
+        }
+    }
+
+    public void ClearChannels()
+    {
+        foreach (var channel in values)
+        {
+            ReleaseValues(channel.Value);
+        }
+
+        values.Clear();
+
+        ChangeChannel(string.Empty);
+    }
+
+    public void ChangeChannel(string channel)
+    {
+        if (curChannel.Equals(channel))
+        {
+            return;
+        }
+
+        SetChannelProperty(channel, true);
+
+        OnChangeChannel();
+    }
+
+    public void AddKey(string channel, string key)
+    {
+        if (values.ContainsKey(channel) == false)
+        {
+            PrintErrorMsg("Duplicate channel", channel);
+            return;
+        }
+        else if (string.IsNullOrEmpty(key))
+        {
+            PrintErrorMsg("Invalid Key", key);
+            return;
+        }
+
+        var targetChannel = values[channel];
+
+        foreach (var val in targetChannel)
+        {
+            if (val.key.Equals(key))
+            {
+                Debug.LogError("Duplicate Key Detected : <color=red>" + key + "</color>");
+                return;
+            }
+        }
+
+        targetChannel.Add(new Value(key));
+    }
+
+    public void RemoveKey(string channel, string key)
+    {
+        var targetValues = values[channel];
+        var target = targetValues.Find(t => t.key.Equals(key));
+
+        if (target != null)
+        {
+            targetValues.Remove(target);
+        }
+    }
+
+    public void SetValue(string channel, string key, int value)
+    {
+        SetValue(channel, key, value.ToString());
+    }
+
+    public void SetValue(string channel, string key, float value)
+    {
+        SetValue(channel, key, value.ToString(floatFormatter));
+    }
+
+    public void SetValue(string channel, string key, string value)
+    {
+        if (values.ContainsKey(channel) == false)
+        {
+            PrintErrorMsg("Not Found Channel", channel);
+            return;
+        }
+
+        var targetValues = values[channel];
+
+        for (int i = 0; i < targetValues.Count; i++)
+        {
+            if (targetValues[i].key.Equals(key))
+            {
+                if (targetValues[i].value.Equals(value) == false)
+                {
+                    string superOldValue = targetValues[i].oldValue;
+                    targetValues[i].oldValue = targetValues[i].value;
+                    targetValues[i].idleTimeElapsed = 0;
+                    targetValues[i].value = value;
+
+                    if (sortValuesByIdleTime)
+                    {
+                        sortingValues = true;
+                    }
+
+                    break;
+                }
+            }
+        }
+    }
+
+    void SetChannelProperty(string channel, bool updateChannelStringCollection)
+    {
+        curChannel = channel;
+
+        if (string.IsNullOrEmpty(channel))
+        {
+            curChannelValue = null;
+        }
+        else
+        {
+            curChannelValue = values[channel];
+        }
+
+        curChannelIndex = -1;
+
+        int i = 0;
+
+        if (values.Count > 0)
+        {
+            if (updateChannelStringCollection)
+            {
+                channels = new string[values.Count];
+                i = 0;
+
+                foreach (var c in values)
+                {
+                    channels[i] = c.Key;
+                    i++;
+                }
+            }
+
+            i = 0;
+
+            foreach (var c in values)
+            {
+                if (c.Key.Equals(curChannel))
+                {
+                    curChannelIndex = i;
+                    break;
+                }
+
+                i++;
+            }
+        }
+        else
+        {
+            if (updateChannelStringCollection)
+            {
+                channels = null;
+            }
+
+            curChannelIndex = -1;
+        }
+    }
+
+    void ReleaseValues(List<Value> values)
+    {
+        for (int i = 0; i < values.Count; i++)
+        {
+            values[i] = null;
+        }
+
+        values.Clear();
+    }
+
+    void OnChangeChannel()
+    {
+        if (curChannelValue != null)
+        {
+            foreach (var v in curChannelValue)
+            {
+                if (clearValuesOnChangeChannel)
+                {
+                    v.SetDefault();
+                }
+            }
+        }
+    }
+
+    void PrintErrorMsg(string statementMsg, string colorizedMsg)
+    {
+        Debug.LogError("<" + statementMsg + ">\t<<color=red>" + colorizedMsg + "</color>>");
+    }
+
+    private void Update()
+    {
+#if JAYCE_ANALYSIS_HELPER
+        /*        if (curChannelValue != null)
+                {
+                    curChannelValue.ForEach(t => t.idleTimeElapsed += Time.deltaTime);
+                } */
+
+        foreach (var channel in values)
+        {
+            foreach (var value in channel.Value)
+            {
+                value.idleTimeElapsed += Time.deltaTime;
+            }
+        }
+
+        if (sortingValues && curChannelValue != null)
+        {
+            curChannelValue.Sort();
+            sortingValues = false;
+        }
+#endif
+    }
+
+    private void OnGUI()
+    {
+#if JAYCE_ANALYSIS_HELPER
+        if (GUILayout.Button(show ? hideString : showString))
+        {
+            SetEnable(!show);
+        }
+
+        if (show)
+        {
+            if (GUILayout.Button(editOptionString))
+            {
+                editOption = !editOption;
+            }
+
+            if (editOption)
+            {
+                DrawEditOption();
+            }
+
+            DrawTable();
+        }
+#endif
+    }
+
+    private void DrawTable()
+    {
+        GUILayout.BeginArea(area);
+
+        GUILayout.BeginHorizontal();
+
+        GUILayout.Label(tapKey, style, widths[(int)WidthOps.Tap01]);
+        GUILayout.Label(tapIdleTime, style, widths[(int)WidthOps.Tap02]);
+        GUILayout.Label(tapValue, style, widths[(int)WidthOps.Tap03]);
+        GUILayout.Label(tapOldValue, style, null);
+
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(10);
+
+        if (curChannelValue != null)
+        {
+            foreach (var v in curChannelValue)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(v.key, style, GUILayout.Width(prop.widths[(int)WidthOps.Value01])); //, widOp, heiOp);
+
+                string timeElapsed = v.idleTimeElapsed.ToString(floatFormatter);
+
+                GUILayout.Label(timeElapsed, style, GUILayout.Width(prop.widths[(int)WidthOps.Value02]));
+                GUILayout.Label(v.value, style, GUILayout.Width(prop.widths[(int)WidthOps.Value03]));
+                GUILayout.Label(v.oldValue, style, null);
+
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        GUILayout.EndArea();
+    }
+
+    private void DrawEditOption()
+    {
+        if (GUILayout.Button(setToDefaultString))
+        {
+            SetDrawPropertyToDefault();
+        }
+
+        bool oldSortValues = sortValuesByIdleTime;
+
+        sortValuesByIdleTime = GUILayout.Toggle(sortValuesByIdleTime, autoSortString);
+
+        if (oldSortValues != sortValuesByIdleTime &&
+            sortValuesByIdleTime)
+        {
+            sortingValues = true;
+        }
+
+        clearValuesOnChangeChannel = GUILayout.Toggle(clearValuesOnChangeChannel, clearValuesOnChangeChannelString);
+
+        GUILayout.Label(fontSizeString);
+        prop.fontSize = (int)(GUILayout.HorizontalSlider(prop.fontSize, 0, 100, optionSliderWid));
+
+        GUILayout.Label(positionString);
+        prop.startXratioToScreen = GUILayout.HorizontalSlider(prop.startXratioToScreen, 0f, 1f, optionSliderWid);
+        prop.startYratioToScreen = GUILayout.VerticalSlider(prop.startYratioToScreen, 0f, 1f, optionSliderWid);
+
+        GUILayout.Label(widthString);
+
+        for (int i = 0; i < (int)WidthOps.END; i++)
+        {
+            SetWidth((WidthOps)i, GUILayout.HorizontalSlider(prop.widths[i], 0, Screen.width, optionSliderWid));
+        }
+
+        GUILayout.Space(5);
+
+        if (values.Count > 0)
+        {
+            GUILayout.Label(channelListString);
+
+            int oldChannel = curChannelIndex;
+
+            curChannelIndex = GUILayout.Toolbar(curChannelIndex, channels, optionSliderWid);
+
+            if (oldChannel != curChannelIndex)
+            {
+                ChangeChannel(channels[curChannelIndex]);
+            }
+        }
+        else
+        {
+            GUILayout.Label(noExistingChannelString);
+        }
+
+        UpdateDrawProperty();
+    }
+
+    private void OnDestroy()
+    {
+#if JAYCE_ANALYSIS_HELPER
+        SaveDrawPropertyToDisk();
+#endif
+    }
+}
