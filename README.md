@@ -5,7 +5,8 @@ Let's say you want to track down this value
 
 int i01;
 
-Then you first register a channel(kind of like grouping) 
+Then you first register a channel so we can distinguish groups of
+values we are interested in.
 
 <b>JayceGUIAnalysisHelper.Instance.RegisterChannel("C1");</b>
 
