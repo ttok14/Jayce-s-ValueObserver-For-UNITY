@@ -20,7 +20,7 @@ but when the value is updated you better let the class know that.
 
 So let's register the new value . 
 
-<b>JayceGUIAnalysisHelper.Instance.SetValue("C1", "IntValue01", i01);</b>
+<color=green><b>JayceGUIAnalysisHelper.Instance.SetValue("C1", "IntValue01", i01);</b></color>
 
 
 
