@@ -1,31 +1,18 @@
 # Jayce-s-ValueObserver
-When you want to go tracking some values , This will help you.
 
-Let's say you want to track down this value
-
-int i01;
-
-Then you first register a channel so we can distinguish groups of
-values we are interested in.
-
-<b>JayceGUIAnalysisHelper.Instance.RegisterChannel("C1");</b>
-
-And you register a key for the helper class to know which one is which.
-
-<b>JayceGUIAnalysisHelper.Instance.AddKey("C1", "IntValue01");</b>
+When you want to watch some values by certain group ? 
 
 
-And you will be able to see the value ,
+Let's say you are interested in
 
-but when the value is updated you better let the class know that.
+<fontsize=30><color=#bb00bb><b>int m_n;</b></color></fontsize>
 
-So let's register the new value . 
+You can simply write
 
-<b>JayceGUIAnalysisHelper.Instance.SetValue("C1", "IntValue01", i01);</b>
+<fontsize=30><color=#bb00bb><b>JayceGUIAnalysisHelper.Instance.SetValue("Channel01", "Value01", m_n);</b></color></fontsize>
 
+It will update the value by specified by the channel and key internally and display it.
 
+when you want to count the number of executions .
 
-
-You do not have to deal with extra options with coding.
-
-It will appear on the screen as a toggle or slider just enjoy !
+<fontsize=30><color=#bb00bb><b>JayceGUIAnalysisHelper.Instance.AdjustValue("CountChannel", "Int01", 1);</b></color></fontsize>
