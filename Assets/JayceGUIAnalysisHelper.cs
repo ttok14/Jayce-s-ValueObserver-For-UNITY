@@ -122,6 +122,7 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
     const string widthString = "Width";
     const string channelListString = "Channels";
     const string noExistingChannelString = "<color=red>No Existing Channel</color>";
+    const string adjustTimeScaleString = "AdjustTimeScale";
     const string clearValuesOnChangeChannelString = "ClearOnChannelSwitch";
     const string autoSortString = "AutoSort";
 
@@ -132,20 +133,24 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
     List<Value> curChannelValue;
     string[] channels;
 
-    const int default_fontSize = 15;
+    const int default_fontSize = 20;
     const float default_startXratioToScreen = 0.2f;
     const float default_startYratioToScreen = 0.2f;
-    readonly float[] default_widths = { 100, 100, 100, 100, 100, 100 };
+    readonly float[] default_widths = { 140, 140, 140, 140, 140, 140 };
 
     Rect area;
     GUILayoutOption[] widths = new GUILayoutOption[(int)WidthOps.END];
     GUILayoutOption optionSliderWid;
     GUIStyle style;
 
+    float oldTimeScale;
+    float curTimeScale = 1;
+
     bool show = true;
     bool editOption;
     bool sortValuesByIdleTime = true;
     bool clearValuesOnChangeChannel = false;
+    bool adjustTimeScale = false;
 
     bool sortingValues;
 
@@ -155,7 +160,7 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
             instance = this;
         else Destroy(gameObject);
 
-        Array.ForEach(widthKeys, t => t.Concat(Application.productName));
+        // Array.ForEach(widthKeys, t => t.Concat(Application.productName));
 
         optionSliderWid = GUILayout.Width(100);
 
@@ -196,6 +201,15 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
         default_widths.CopyTo(prop.widths, 0);
 
         UpdateDrawProperty();
+    }
+
+    /// <summary>
+    /// e.g) Red : ff0000 . . . 
+    /// </summary>
+    /// <param name="color"></param>
+    string ColorizeString(string source, string color)
+    {
+        return "<color=#" + color + ">" + source + "</color>";
     }
 
     public void LoadDrawProperty()
@@ -246,7 +260,7 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
     {
         if (values.ContainsKey(channel))
         {
-            PrintErrorMsg("Duplicate Channel", channel);
+            //            PrintErrorMsg("Duplicate Channel", channel);
             return;
         }
         if (string.IsNullOrEmpty(channel))
@@ -311,31 +325,65 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
         OnChangeChannel();
     }
 
-    public void AddKey(string channel, string key)
+    public void AddKey(string channel, params string[] key)
     {
-        if (values.ContainsKey(channel) == false)
+        if (key == null)
         {
-            PrintErrorMsg("Duplicate channel", channel);
+            PrintErrorMsg("Invalid Key", string.Empty);
             return;
         }
-        else if (string.IsNullOrEmpty(key))
+
+        if (values.ContainsKey(channel) == false)
         {
-            PrintErrorMsg("Invalid Key", key);
-            return;
+            RegisterChannel(channel);
         }
 
         var targetChannel = values[channel];
 
         foreach (var val in targetChannel)
         {
-            if (val.key.Equals(key))
+            foreach (var _key in key)
             {
-                Debug.LogError("Duplicate Key Detected : <color=red>" + key + "</color>");
-                return;
+                if (val.key.Equals(_key))
+                {
+                    //    PrintErrorMsg("Duplicate Key", _key);
+                    return;
+                }
             }
         }
 
-        targetChannel.Add(new Value(key));
+        AddKey(targetChannel, key);
+    }
+
+    public void AddKey(string channel, string key, string defaultValue)
+    {
+        if (string.IsNullOrEmpty(key))
+        {
+            PrintErrorMsg("Invalid Key", string.Empty);
+            return;
+        }
+        
+        if (values.ContainsKey(channel) == false)
+        {
+            RegisterChannel(channel);
+        }
+       
+        var targetChannel = values[channel];
+        var duplicate = targetChannel.Find(t => t.Equals(key));
+
+        if(duplicate == null)
+        {
+            AddKey(targetChannel, key);
+            targetChannel.Last().value = defaultValue;
+        }
+    }
+
+    void AddKey(List<Value> list, params string[] keys)
+    {
+        for (int i = 0; i < keys.Length; i++)
+        {
+            list.Add(new Value(keys[i]));
+        }
     }
 
     public void RemoveKey(string channel, string key)
@@ -363,32 +411,96 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
     {
         if (values.ContainsKey(channel) == false)
         {
-            PrintErrorMsg("Not Found Channel", channel);
-            return;
+            RegisterChannel(channel);
         }
 
         var targetValues = values[channel];
 
-        for (int i = 0; i < targetValues.Count; i++)
+        var target = targetValues.Find(t => t.key.Equals(key));
+
+        if (target == null)
         {
-            if (targetValues[i].key.Equals(key))
+            AddKey(targetValues, key);
+            target = targetValues.Last();
+        }
+
+        target.idleTimeElapsed = 0;
+
+        if (target.value.Equals(value) == false)
+        {
+            string superOldValue = target.oldValue;
+            target.oldValue = target.value;
+            target.value = value;
+
+            if (sortValuesByIdleTime)
             {
-                if (targetValues[i].value.Equals(value) == false)
-                {
-                    string superOldValue = targetValues[i].oldValue;
-                    targetValues[i].oldValue = targetValues[i].value;
-                    targetValues[i].idleTimeElapsed = 0;
-                    targetValues[i].value = value;
-
-                    if (sortValuesByIdleTime)
-                    {
-                        sortingValues = true;
-                    }
-
-                    break;
-                }
+                sortingValues = true;
             }
         }
+    }
+
+    public void AdjustValue(string channel, string key, int amount)
+    {
+        if (values.ContainsKey(channel) == false)
+        {
+            RegisterChannel(channel);
+        }
+
+        var target = values[channel].Find(t => t.key.Equals(key));
+
+        if (target == null)
+        {
+            AddKey(channel, key, "0");
+        }
+        else
+        {
+            int curValue = -1;
+
+            if (int.TryParse(target.value, out curValue))
+            {
+                SetValue(channel, key, curValue + amount);
+            }
+        }
+    }
+
+    public void AdjustValue(string channel, string key, float amount)
+    {
+        if (values.ContainsKey(channel) == false)
+        {
+            RegisterChannel(channel);
+        }
+
+        var target = values[channel].Find(t => t.key.Equals(key));
+
+        if (target == null)
+        {
+            AddKey(channel, key, "0.0");
+        }
+        else
+        {
+            float curValue = -1;
+
+            if (float.TryParse(target.value, out curValue))
+            {
+                SetValue(channel, key, curValue + amount);
+            }
+        }
+    }
+
+    public string GetValue(string channel, string key)
+    {
+        if (values.ContainsKey(channel) == false)
+            return string.Empty;
+
+        var target = values[channel].Find(t => t.key.Equals(key));
+        string result = string.Empty;
+
+        if(target != null)
+        {
+            result = target.value;
+        }
+
+        return result;
     }
 
     void SetChannelProperty(string channel, bool updateChannelStringCollection)
@@ -472,17 +584,12 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
 
     void PrintErrorMsg(string statementMsg, string colorizedMsg)
     {
-        Debug.LogError("<" + statementMsg + ">\t<<color=red>" + colorizedMsg + "</color>>");
+        UnityEngine.Debug.LogError("<" + statementMsg + ">\t<<color=red>" + colorizedMsg + "</color>>");
     }
 
     private void Update()
     {
 #if JAYCE_ANALYSIS_HELPER
-        /*        if (curChannelValue != null)
-                {
-                    curChannelValue.ForEach(t => t.idleTimeElapsed += Time.deltaTime);
-                } */
-
         foreach (var channel in values)
         {
             foreach (var value in channel.Value)
@@ -509,6 +616,11 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
 
         if (show)
         {
+            if (GUILayout.Button("Pause"))
+            {
+                Debug.Break();
+            }
+
             if (GUILayout.Button(editOptionString))
             {
                 editOption = !editOption;
@@ -564,6 +676,36 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
         if (GUILayout.Button(setToDefaultString))
         {
             SetDrawPropertyToDefault();
+        }
+
+        bool oldAdjustTimeScale = adjustTimeScale;
+
+        adjustTimeScale = GUILayout.Toggle(adjustTimeScale, adjustTimeScaleString);
+
+        if (oldAdjustTimeScale != adjustTimeScale)
+        {
+            if (adjustTimeScale)
+            {
+                oldTimeScale = Time.timeScale;
+                //    TimeManager.instance.timeScale = curTimeScale;
+                Time.timeScale = curTimeScale;
+            }
+            else
+            {
+                Time.timeScale = oldTimeScale;
+                //      TimeManager.instance.timeScale = oldTimeScale;
+            }
+        }
+
+        if (adjustTimeScale)
+        {
+            float oldScale = curTimeScale;
+            curTimeScale = GUILayout.HorizontalSlider(curTimeScale, 0f, 4f, optionSliderWid);
+            if (oldScale != curTimeScale)
+            {
+                //     TimeManager.instance.timeScale = curTimeScale;
+                Time.timeScale = curTimeScale;
+            }
         }
 
         bool oldSortValues = sortValuesByIdleTime;
