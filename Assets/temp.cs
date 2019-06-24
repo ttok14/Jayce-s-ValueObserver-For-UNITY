@@ -44,6 +44,19 @@ public class temp : MonoBehaviour
         {
             SetString("whole lot of cash" + Random.Range(0, 100).ToString());
         }
+
+        // OR you can just skip registering channel and key , 
+        // It will just automatically register by the requested channel and key.
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            JayceGUIAnalysisHelper.Instance.SetValue("Auto", "Hello", 1234);
+        }
+
+        // It will count ascending . Also automatical registration.
+        if(Input.GetKeyDown(KeyCode.T))
+        {
+            JayceGUIAnalysisHelper.Instance.AdjustValue("Count", "Int", 1);
+        }
     }
 
     // Update values to the helper class 
