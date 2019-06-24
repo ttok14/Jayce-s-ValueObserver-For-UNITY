@@ -120,6 +120,7 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
     const string fontSizeString = "FontSize";
     const string positionString = "Position";
     const string widthString = "Width";
+    const string pauseString = "Pause";
     const string channelListString = "Channels";
     const string noExistingChannelString = "<color=red>No Existing Channel</color>";
     const string adjustTimeScaleString = "AdjustTimeScale";
@@ -140,7 +141,8 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
 
     Rect area;
     GUILayoutOption[] widths = new GUILayoutOption[(int)WidthOps.END];
-    GUILayoutOption optionSliderWid;
+    GUILayoutOption generalLayoutWidthOp;
+    GUILayoutOption optionChannelListWid, optionChannelListHei;
     GUIStyle style;
 
     float oldTimeScale;
@@ -162,7 +164,9 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
 
         // Array.ForEach(widthKeys, t => t.Concat(Application.productName));
 
-        optionSliderWid = GUILayout.Width(100);
+        generalLayoutWidthOp = GUILayout.Width(100);
+        optionChannelListWid = GUILayout.Width(150);
+        optionChannelListHei = GUILayout.Height(35);
 
         style = new GUIStyle();
         style.fontStyle = FontStyle.Bold;
@@ -260,7 +264,6 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
     {
         if (values.ContainsKey(channel))
         {
-            //            PrintErrorMsg("Duplicate Channel", channel);
             return;
         }
         if (string.IsNullOrEmpty(channel))
@@ -276,6 +279,10 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
         if (wasEmpty)
         {
             ChangeChannel(channel);
+        }
+        else
+        {
+            SetChannelProperty(curChannel, true);
         }
     }
 
@@ -609,19 +616,19 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
     private void OnGUI()
     {
 #if JAYCE_ANALYSIS_HELPER
-        if (GUILayout.Button(show ? hideString : showString))
+        if (GUILayout.Button(show ? hideString : showString, generalLayoutWidthOp))
         {
             SetEnable(!show);
         }
 
         if (show)
         {
-            if (GUILayout.Button("Pause"))
+            if (GUILayout.Button(pauseString, generalLayoutWidthOp))
             {
                 Debug.Break();
             }
 
-            if (GUILayout.Button(editOptionString))
+            if (GUILayout.Button(editOptionString, generalLayoutWidthOp))
             {
                 editOption = !editOption;
             }
@@ -673,7 +680,7 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
 
     private void DrawEditOption()
     {
-        if (GUILayout.Button(setToDefaultString))
+        if (GUILayout.Button(setToDefaultString, generalLayoutWidthOp))
         {
             SetDrawPropertyToDefault();
         }
@@ -700,7 +707,7 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
         if (adjustTimeScale)
         {
             float oldScale = curTimeScale;
-            curTimeScale = GUILayout.HorizontalSlider(curTimeScale, 0f, 4f, optionSliderWid);
+            curTimeScale = GUILayout.HorizontalSlider(curTimeScale, 0f, 4f, generalLayoutWidthOp);
             if (oldScale != curTimeScale)
             {
                 //     TimeManager.instance.timeScale = curTimeScale;
@@ -721,17 +728,17 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
         clearValuesOnChangeChannel = GUILayout.Toggle(clearValuesOnChangeChannel, clearValuesOnChangeChannelString);
 
         GUILayout.Label(fontSizeString);
-        prop.fontSize = (int)(GUILayout.HorizontalSlider(prop.fontSize, 0, 100, optionSliderWid));
+        prop.fontSize = (int)(GUILayout.HorizontalSlider(prop.fontSize, 0, 100, generalLayoutWidthOp));
 
         GUILayout.Label(positionString);
-        prop.startXratioToScreen = GUILayout.HorizontalSlider(prop.startXratioToScreen, 0f, 1f, optionSliderWid);
-        prop.startYratioToScreen = GUILayout.VerticalSlider(prop.startYratioToScreen, 0f, 1f, optionSliderWid);
+        prop.startXratioToScreen = GUILayout.HorizontalSlider(prop.startXratioToScreen, 0f, 1f, generalLayoutWidthOp);
+        prop.startYratioToScreen = GUILayout.VerticalSlider(prop.startYratioToScreen, 0f, 1f, generalLayoutWidthOp);
 
         GUILayout.Label(widthString);
 
         for (int i = 0; i < (int)WidthOps.END; i++)
         {
-            SetWidth((WidthOps)i, GUILayout.HorizontalSlider(prop.widths[i], 0, Screen.width, optionSliderWid));
+            SetWidth((WidthOps)i, GUILayout.HorizontalSlider(prop.widths[i], 0, Screen.width, generalLayoutWidthOp));
         }
 
         GUILayout.Space(5);
@@ -742,7 +749,7 @@ public class JayceGUIAnalysisHelper : MonoBehaviour
 
             int oldChannel = curChannelIndex;
 
-            curChannelIndex = GUILayout.Toolbar(curChannelIndex, channels, optionSliderWid);
+            curChannelIndex = GUILayout.Toolbar(curChannelIndex, channels, optionChannelListWid, optionChannelListHei);
 
             if (oldChannel != curChannelIndex)
             {
